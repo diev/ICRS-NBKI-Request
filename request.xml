@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="Windows-1251" ?>
+<product>
+<prequest>
+<req>
+
+<IdReq>
+  <seriesNumber>XXXX</seriesNumber>
+  <idNum>XXXXXX</idNum>
+  <idType>21</idType>
+  <issueDate>20XX-XX-XX</issueDate>
+  <issueAuthority>XX XXXXXXX XXXXXXX XXXXXXXXXXX XXXXXX XXXXX-XXXXXXXXXX XXX-XXX</issueAuthority>
+</IdReq>
+
+<PersonReq>
+  <name1>XXXXXX</name1>
+  <first>XXXXXXXX</first>
+  <paternal>XXXXXXXXXXX</paternal>
+  <birthDt>19XX-XX-XX</birthDt>
+  <placeOfBirth>XXX.XXXXX XXXXXXXXXXXXX XXX.</placeOfBirth>
+</PersonReq>
+
+<AddressReq>
+  <city>XXXXX-XXXXXXXXX</city>
+  <street>XXXXXXXXXX XXXXXXXXXX</street>
+  <addressType>1</addressType>
+</AddressReq>
+
+<AddressReq>
+  <city>XXXXX-XXXXXXXXX</city>
+  <street>XXXXXXXXXX XXXXXXXXXX</street>
+  <addressType>2</addressType>
+</AddressReq>
+
+<InquiryReq>
+  <ConsentReq>
+    <consentFlag>Y</consentFlag>
+    <consentDate>20XX-XX-XX</consentDate>
+    <consentExpireDate>20XX-XX-XX</consentExpireDate>
+    <consentPurpose>1</consentPurpose>
+    <reportUser>XX XXXX XXXXXX XXXX</reportUser>
+    <liability>Y</liability>
+  </ConsentReq>
+  <inqPurpose>22</inqPurpose>
+  <inqAmount>0</inqAmount>
+  <currencyCode>RUB</currencyCode>
+</InquiryReq>
+
+<RequestorReq>
+  <MemberCode>XXXXXX000000</MemberCode>
+  <UserID>XXXXXX000002</UserID>
+  <Password>XXXXXXXXX</Password>
+</RequestorReq>
+
+<RefReq>
+  <userReference>No 1</userReference>
+  <product>CHIP</product>
+</RefReq>
+
+<requestDateTime>20XX-XX-XX</requestDateTime>
+<IOType>B2B</IOType>
+<OutputFormat>XML</OutputFormat>
+<version>2</version>
+</req>
+</prequest>
+</product>

@@ -1,0 +1,27 @@
+{% if page.url == "/" %}
+<h2 id="download">{{ site.locales[lang].download }}</h2>
+<div id="releases"><a href="{{ site.github.releases_url }}" title="Releases">Releases on GitHub</a></div>
+
+<script type="text/javascript">{% comment %} based on https://github.com/typicode/pegasus {% endcomment %}
+function pegasus(a,b,c){return c=new XMLHttpRequest,c.open("GET",a),a=[],pegasus.timeout&&(c.timeout=pegasus.timeout),c.ontimeout=function(a){b=a},c.onreadystatechange=c.then=function(d,e,f,g){if(d&&d.call&&(a=[,d,e]),b&&a[2]&&a[2](b,c),4==c.readyState&&(f=a[0|c.status/200])){try{g=JSON.parse(c.responseText)}catch(a){g=null}f(g,c)}},c.send(),c}
+var releases=pegasus('https://api.github.com/repos/{{ site.github.repository_nwo }}/releases');
+releases.then(function(data){var n=Math.min(data.length,3);s=[];
+s.push('<output><table><thead><tr>');
+s.push('<th>{{ site.locales[lang].relnotes }}</th>');
+s.push('<th>{{ site.locales[lang].download }}</th>');
+s.push('<th>{{ site.locales[lang].date }}</th>');
+s.push('</tr></thead><tbody>');
+for(var i=0;i<n;i++){var r=data[i];var m=r.assets.length;
+for(var j=0;j<m;j++){var a=r.assets[j];
+s.push('<tr><td>');
+if(j==0)s.push('<a href="',r.html_url,'">',r.name,'</a>',r.prerelease?' beta':'');
+s.push('</td>');
+s.push('<td>',a.name,' <a href="',a.browser_download_url,'">',Math.round(a.size/1024).toLocaleString(),'KB</a></td>');
+s.push('<td>',a.updated_at.substring(0,10),'</td></tr>');
+}}
+
+s.push('</tbody></table></output>');
+document.getElementById('releases').innerHTML=s.join('');
+});
+</script>
+{% endif %}

@@ -1,0 +1,16 @@
+{% include head.html %}
+{% include body.html %}
+<hgroup>
+<div id="title">
+<h1>{{ site.title | default: site.github.repository_name }}</h1>
+<p>{{ site.description | default: site.github.project_tagline }}</p>
+<hr>
+<span class="credits left">{{ site.locales[lang].maintained }} <a href="{{ site.locales[lang].path }}" title="{{ site.locales[lang].home }}">{{ site.locales[lang].name }}</a></span>
+<span class="credits right">{{ site.locales[lang].hosted }} <a href="{{ site.github.repository_url }}" title="Project">GitHub</a></span>
+</div>
+</hgroup>
+<article>
+{{ content }}
+</article>
+{% include download.html %}
+{% include footer.html %}

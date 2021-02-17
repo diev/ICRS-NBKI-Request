@@ -1,0 +1,23 @@
+locales:
+  ru:
+    maintained: Проект развивает
+    name: Дмитрий Евдокимов
+    tagline: Персональный сайт
+    home: Главная
+    path: /
+    hosted: Размещается на
+    download: Скачать
+    relnotes: Релиз
+    date: Дата
+  en:
+    maintained: Project maintained by
+    name: Dmitrii Evdokimov
+    tagline: Personal Website
+    home: Home Page
+    path: /en/
+    hosted: Hosted on
+    download: Download
+    relnotes: Release
+    date: Date
+
+theme: jekyll-theme-midnight
