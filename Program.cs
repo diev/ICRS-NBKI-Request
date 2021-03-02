@@ -16,6 +16,7 @@
 #endregion
 
 using System;
+using System.Configuration;
 using System.IO;
 using System.Net;
 using System.Reflection;
@@ -25,33 +26,33 @@ namespace ICRS_NBKI_Request
 {
     class Program
     {
-        //const string Url = "http://icrs.demo.nbki.ru/products/B2BRequestServlet"; //demo
-        const string Url = "https://icrs.nbki.ru/products/B2BRequestServlet";
-
         static void Main(string[] args)
         {
-            string src = "request.xml";
-            string dst = "result.xml.p7s";
-            string dsx = "result.xml";
+            var settings = ConfigurationManager.AppSettings;
 
-            if (!File.Exists(src))
+            string uriPath = settings["Uri"] ?? "https://icrs.nbki.ru/products/B2BRequestServlet";
+            string srcPath = settings["Requests"] ?? ".";
+            string dstPath = settings["Results"] ?? ".";
+
+            var dir = new DirectoryInfo(srcPath);
+            foreach (var file in dir.GetFiles("*.req"))
             {
-                Console.WriteLine($"File {src} not found.");
-                Environment.Exit(2);
+                string srcFile = file.FullName;
+                string dstFile = Path.Combine(dstPath, Path.ChangeExtension(file.Name, ".xml"));
+                DownloadFile(uriPath, srcFile, dstFile);
             }
 
-            DownloadFile(src, dst, dsx);
             Environment.Exit(0);
         }
 
-        private static void DownloadFile(string src, string dst, string dsx)
+        private static void DownloadFile(string uri, string src, string dst)
         {
-            var request = (HttpWebRequest)WebRequest.Create(Url);
+            var request = (HttpWebRequest)WebRequest.Create(uri);
             request.UserAgent = UserAgent();
             request.Method = WebRequestMethods.Http.Post;
-            request.Proxy = null;
 
-            ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
+            // http://cpca.cryptopro.ru/cacer.p7b
+            //request.ServerCertificateValidationCallback = delegate { return true; };
 
             using (var stream = request.GetRequestStream())
             {
@@ -75,22 +76,23 @@ namespace ICRS_NBKI_Request
                     }
                 }
 
-                using (var stream = new FileStream(dst, FileMode.Create))
-                {
-                    data.Position = 0;
-                    data.CopyTo(stream);
-                    data.Flush();
-                }
-                Console.WriteLine($"File {dst} ready.");
+                //using (var stream = new FileStream(dst + ".p7s", FileMode.Create))
+                //{
+                //    data.Position = 0;
+                //    data.CopyTo(stream);
+                //    data.Flush();
+                //}
+                //Console.WriteLine($"File {dst}.p7s ready.");
 
                 byte[] bytes = data.GetBuffer();
 
+                // Clean XML from a PCKS#7 signature
                 var signedCms = new SignedCms();
                 signedCms.Decode(bytes);
                 bytes = signedCms.ContentInfo.Content;
 
-                File.WriteAllBytes(dsx, bytes);
-                Console.WriteLine($"File {dsx} ready.");
+                File.WriteAllBytes(dst, bytes);
+                Console.WriteLine($"File {dst} ready.");
             }
         }
 
