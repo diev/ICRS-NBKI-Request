@@ -33,8 +33,9 @@ namespace ICRS_NBKI_Request
             string srcPath = settings["Requests"] ?? ".";
             string dstPath = settings["Results"] ?? ".";
 
-            // Use TLS 1.2
+            // Use TLS 1.2 (required!)
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
             // Ignore any Cert validation or install the root ones from http://cpca.cryptopro.ru/cacer.p7b
             //ServicePointManager.ServerCertificateValidationCallback += (se, cert, chain, sslerror) => { return true; };
 
@@ -57,7 +58,7 @@ namespace ICRS_NBKI_Request
 
             if (response != null && response.Length > 0)
             {
-                // Clean XML from a PCKS#7 signature
+                // Clean XML from a PKCS#7 signature
                 var signedCms = new SignedCms();
                 signedCms.Decode(response);
                 byte[] data = signedCms.ContentInfo.Content;
