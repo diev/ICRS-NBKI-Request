@@ -19,7 +19,6 @@ using System;
 using System.Configuration;
 using System.IO;
 using System.Net;
-using System.Reflection;
 using System.Security.Cryptography.Pkcs;
 
 namespace ICRS_NBKI_Request
@@ -34,11 +33,17 @@ namespace ICRS_NBKI_Request
             string srcPath = settings["Requests"] ?? ".";
             string dstPath = settings["Results"] ?? ".";
 
+            // Use TLS 1.2
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+            // Ignore any Cert validation or install the root ones from http://cpca.cryptopro.ru/cacer.p7b
+            //ServicePointManager.ServerCertificateValidationCallback += (se, cert, chain, sslerror) => { return true; };
+
             var dir = new DirectoryInfo(srcPath);
             foreach (var file in dir.GetFiles("*.req"))
             {
                 string srcFile = file.FullName;
                 string dstFile = Path.Combine(dstPath, Path.ChangeExtension(file.Name, ".xml"));
+
                 DownloadFile(uriPath, srcFile, dstFile);
             }
 
@@ -47,61 +52,19 @@ namespace ICRS_NBKI_Request
 
         private static void DownloadFile(string uri, string src, string dst)
         {
-            var request = (HttpWebRequest)WebRequest.Create(uri);
-            request.UserAgent = UserAgent();
-            request.Method = WebRequestMethods.Http.Post;
+            var client = new WebClient();
+            byte[] response = client.UploadFile(uri, src);
 
-            // http://cpca.cryptopro.ru/cacer.p7b
-            //request.ServerCertificateValidationCallback = delegate { return true; };
-
-            using (var stream = request.GetRequestStream())
+            if (response != null && response.Length > 0)
             {
-                byte[] bytes = File.ReadAllBytes(src);
-                stream.Write(bytes, 0, bytes.Length);
-            }
-
-            using (var data = new MemoryStream())
-            {
-                using (var response = (HttpWebResponse)request.GetResponse())
-                {
-                    Console.WriteLine($"Response: {response.StatusDescription}.");
-                    if (response.StatusCode != HttpStatusCode.OK)
-                    {
-                        Environment.Exit(1);
-                    }
-
-                    using (var stream = response.GetResponseStream())
-                    {
-                        stream.CopyTo(data);
-                    }
-                }
-
-                //using (var stream = new FileStream(dst + ".p7s", FileMode.Create))
-                //{
-                //    data.Position = 0;
-                //    data.CopyTo(stream);
-                //    data.Flush();
-                //}
-                //Console.WriteLine($"File {dst}.p7s ready.");
-
-                byte[] bytes = data.GetBuffer();
-
                 // Clean XML from a PCKS#7 signature
                 var signedCms = new SignedCms();
-                signedCms.Decode(bytes);
-                bytes = signedCms.ContentInfo.Content;
+                signedCms.Decode(response);
+                byte[] data = signedCms.ContentInfo.Content;
 
-                File.WriteAllBytes(dst, bytes);
+                File.WriteAllBytes(dst, data);
                 Console.WriteLine($"File {dst} ready.");
             }
-        }
-
-        private static string UserAgent()
-        {
-            Assembly asm = Assembly.GetCallingAssembly();
-            string name = asm.GetName().Name;
-            string ver = asm.GetName().Version.ToString(2);
-            return $"{name}/{ver}";
         }
     }
 }
