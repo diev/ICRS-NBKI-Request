@@ -16,23 +16,27 @@
 #endregion
 
 using System;
+using System.Collections.Specialized;
 using System.Configuration;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography.Pkcs;
+using System.Xml;
 
 namespace ICRS_NBKI_Request
 {
     class Program
     {
+        static NameValueCollection _settings = ConfigurationManager.AppSettings;
+        static readonly string _today = DateTime.Today.ToString("yyyy-MM-dd");
+
         static void Main(string[] args)
         {
-            var settings = ConfigurationManager.AppSettings;
-
-            string uriPath = settings["Uri"] ?? "https://icrs.nbki.ru/products/B2BRequestServlet";
-            string srcPath = settings["Requests"] ?? ".";
-            string bakPath = settings["RequestsBAK"] ?? "REQ";
-            string dstPath = settings["Results"] ?? "XML";
+            foreach (var arg in args)
+            {
+                SetIf(arg, "Password");
+                Usage(arg);
+            }
 
             // Use TLS 1.2 (required!)
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
@@ -40,31 +44,102 @@ namespace ICRS_NBKI_Request
             // Ignore any Cert validation or install the root ones from http://cpca.cryptopro.ru/cacer.p7b
             //ServicePointManager.ServerCertificateValidationCallback += (se, cert, chain, sslerror) => { return true; };
 
+            string bakPath = _settings["RequestsBAK"] ?? "REQ";
             if (!Directory.Exists(bakPath))
             {
                 Directory.CreateDirectory(bakPath);
             }
 
+            string dstPath = _settings["Results"] ?? "XML";
             if (!Directory.Exists(dstPath))
             {
                 Directory.CreateDirectory(dstPath);
             }
 
+            string srcPath = _settings["Requests"] ?? ".";
             var dir = new DirectoryInfo(srcPath);
             foreach (var file in dir.GetFiles("*.req"))
             {
-                string srcFile = file.FullName;
-                string bakFile = Path.Combine(bakPath, file.Name);
-                string dstFile = Path.Combine(dstPath, Path.ChangeExtension(file.Name, ".xml"));
+                var xml = new XmlDocument();
+                xml.Load(file.FullName);
 
-                DownloadFile(uriPath, srcFile, dstFile, bakFile);
+                xml.GetElementsByTagName("MemberCode")[0]
+                    .InnerText = _settings["MemberCode"]
+                    ?? throw new Exception("No value for *MemberCode*.");
+
+                xml.GetElementsByTagName("UserID")[0]
+                    .InnerText = _settings["UserID"]
+                    ?? throw new Exception("No value for *UserID*.");
+
+                xml.GetElementsByTagName("Password")[0]
+                    .InnerText = _settings["Password"]
+                    ?? throw new Exception("No value for *Password*.");
+
+                xml.GetElementsByTagName("requestDateTime")[0]
+                    .InnerText = _today;
+
+                string reqFile = "request.xml";
+                xml.Save(reqFile);
+
+                string filename = $"{_today} {file.Name}";
+                string bakFile = Path.Combine(bakPath, filename);
+
+                filename = Path.ChangeExtension(filename, null);
+                string dstFile = Path.Combine(dstPath, filename + ".xml");
+
+                if (IsSet("Request"))
+                {
+                    DownloadFile(reqFile, dstFile, bakFile);
+                }
+
+                if (IsSet("Extract"))
+                {
+                    string mask = filename + " *.xml";
+                    var d = new DirectoryInfo(dstPath);
+                    foreach (var f in d.GetFiles(mask))
+                    {
+                        f.Delete();
+                    }
+
+                    string format = Path.Combine(dstPath, filename + " {0:000}.xml");
+                    ExtractAccountReplies(dstFile, format);
+                }
             }
 
             Environment.Exit(0);
         }
 
-        private static void DownloadFile(string uri, string src, string dst, string bak)
+        private static void Usage(string arg)
         {
+            var help = new [] { "/?", "-?", "/h", "-h", "/help", "-help", "--help" };
+            foreach (string opt in help)
+            {
+                if (arg.Equals(opt, StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine("Help"); //TODO Help wanted
+
+                    Environment.Exit(1);
+                }
+            }
+        }
+
+        private static void SetIf(string arg, string key)
+        {
+            if (arg.StartsWith(key + "=", StringComparison.OrdinalIgnoreCase))
+            {
+                _settings[key] = arg.Substring(key.Length + 1);
+            }
+        }
+
+        private static bool IsSet(string key)
+        {
+            return (_settings[key] ?? "0").Equals("1");
+        }
+
+        private static void DownloadFile(string src, string dst, string bak)
+        {
+            string uri = _settings["Uri"] ?? "https://icrs.nbki.ru/products/B2BRequestServlet";
+
             var client = new WebClient();
             byte[] response = client.UploadData(uri, File.ReadAllBytes(src));
 
@@ -78,7 +153,18 @@ namespace ICRS_NBKI_Request
                 response = signedCms.ContentInfo.Content;
 
                 File.WriteAllBytes(dst, response);
-                Console.WriteLine($"File {dst} ready.");
+
+                var xml = new XmlDocument();
+                xml.Load(dst);
+                var text = xml.SelectSingleNode("/product/preply/err/ctErr/Text/text()");
+                if (text != null)
+                {
+                    Console.WriteLine("Error: " + text.InnerText); //TODO Error returned
+                }
+                else
+                {
+                    Console.WriteLine($"File {dst} ready.");
+                }
 
                 if (File.Exists(bak))
                 {
@@ -86,6 +172,36 @@ namespace ICRS_NBKI_Request
                 }
 
                 File.Move(src, bak);
+            }
+        }
+
+        private static void ExtractAccountReplies(string src, string format)
+        {
+            var xml = new XmlDocument();
+            xml.Load(src);
+
+            bool activeOnly = IsSet("ActiveOnly");
+
+            var sections = xml.GetElementsByTagName("AccountReply");
+            for (int i = 0; i < sections.Count; i++)
+            {
+                var sec = new XmlDocument();
+                sec.LoadXml(sections[i].OuterXml);
+
+                if (activeOnly)
+                {
+                    var text = sec.SelectSingleNode("//accountRating/text()");
+                    if (text == null || !text.InnerText.Equals("0"))
+                    {
+                        continue;
+                    }
+                }
+
+                var decl = sec.CreateXmlDeclaration("1.0", "windows-1251", null);
+                sec.InsertBefore(decl, sec.DocumentElement);
+
+                string file = string.Format(format, i + 1);
+                sec.Save(file);
             }
         }
     }
