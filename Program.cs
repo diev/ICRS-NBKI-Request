@@ -16,8 +16,6 @@
 #endregion
 
 using System;
-using System.Collections.Specialized;
-using System.Configuration;
 using System.IO;
 using System.Net;
 using System.Security.Cryptography.Pkcs;
@@ -27,125 +25,128 @@ namespace ICRS_NBKI_Request
 {
     class Program
     {
-        static NameValueCollection _settings = ConfigurationManager.AppSettings;
         static readonly string _today = DateTime.Today.ToString("yyyy-MM-dd");
 
         static void Main(string[] args)
         {
-            foreach (var arg in args)
+            try
             {
-                SetIf(arg, "Password");
-                Usage(arg);
-            }
-
-            // Use TLS 1.2 (required!)
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-            // Ignore any Cert validation or install the root ones from http://cpca.cryptopro.ru/cacer.p7b
-            //ServicePointManager.ServerCertificateValidationCallback += (se, cert, chain, sslerror) => { return true; };
-
-            string bakPath = _settings["RequestsBAK"] ?? "REQ";
-            if (!Directory.Exists(bakPath))
-            {
-                Directory.CreateDirectory(bakPath);
-            }
-
-            string dstPath = _settings["Results"] ?? "XML";
-            if (!Directory.Exists(dstPath))
-            {
-                Directory.CreateDirectory(dstPath);
-            }
-
-            string srcPath = _settings["Requests"] ?? ".";
-            var dir = new DirectoryInfo(srcPath);
-            foreach (var file in dir.GetFiles("*.req"))
-            {
-                var xml = new XmlDocument();
-                xml.Load(file.FullName);
-
-                xml.GetElementsByTagName("MemberCode")[0]
-                    .InnerText = _settings["MemberCode"]
-                    ?? throw new Exception("No value for *MemberCode*.");
-
-                xml.GetElementsByTagName("UserID")[0]
-                    .InnerText = _settings["UserID"]
-                    ?? throw new Exception("No value for *UserID*.");
-
-                xml.GetElementsByTagName("Password")[0]
-                    .InnerText = _settings["Password"]
-                    ?? throw new Exception("No value for *Password*.");
-
-                xml.GetElementsByTagName("requestDateTime")[0]
-                    .InnerText = _today;
-
-                string reqFile = "request.xml";
-                xml.Save(reqFile);
-
-                string filename = $"{_today} {file.Name}";
-                string bakFile = Path.Combine(bakPath, filename);
-
-                filename = Path.ChangeExtension(filename, null);
-                string dstFile = Path.Combine(dstPath, filename + ".xml");
-
-                if (IsSet("Request"))
+                foreach (var arg in args)
                 {
-                    DownloadFile(reqFile, dstFile, bakFile);
+                    Config.SetIf(arg, "Password");
+                    Config.Usage(arg);
                 }
 
-                if (IsSet("Extract"))
+                // Use TLS 1.2 (required!)
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+
+                // Ignore any Cert validation or install the root ones from http://cpca.cryptopro.ru/cacer.p7b
+                //ServicePointManager.ServerCertificateValidationCallback += (se, cert, chain, sslerror) => { return true; };
+
+                string bakPath = Config.CheckDirectory("RequestsBAK", "REQ");
+                string dstPath = Config.CheckDirectory("Results", "XML");
+
+                string srcPath = Config.Optional("Requests", ".");
+                var dir = new DirectoryInfo(srcPath);
+                foreach (var file in dir.GetFiles("*.req"))
                 {
-                    string mask = filename + " *.xml";
-                    var d = new DirectoryInfo(dstPath);
-                    foreach (var f in d.GetFiles(mask))
+                    string reqFile = "request.xml";
+                    FormRequestXml(file.FullName, reqFile);
+
+                    string filename = $"{_today} {file.Name}";
+                    string bakFile = Path.Combine(bakPath, filename);
+
+                    filename = Path.ChangeExtension(filename, null);
+                    string dstFile = Path.Combine(dstPath, filename + ".xml");
+
+                    if (Config.IsSet("Request"))
                     {
-                        f.Delete();
+                        DownloadFile(reqFile, dstFile, bakFile);
                     }
 
-                    string format = Path.Combine(dstPath, filename + " {0:000}.xml");
-                    ExtractAccountReplies(dstFile, format);
-                }
-            }
+                    if (Config.IsSet("Extract"))
+                    {
+                        string mask = filename + " *.xml";
+                        var d = new DirectoryInfo(dstPath);
+                        foreach (var f in d.GetFiles(mask))
+                        {
+                            f.Delete();
+                        }
 
-            Environment.Exit(0);
+                        string format = Path.Combine(dstPath, filename + " {0:000}.xml");
+                        ExtractAccountReplies(dstFile, format);
+                    }
+                }
+
+                Environment.Exit(0);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                Environment.Exit(1);
+            }
         }
 
-        private static void Usage(string arg)
+        private static void FormRequestXml(string file, string reqFile)
         {
-            var help = new [] { "/?", "-?", "/h", "-h", "/help", "-help", "--help" };
-            foreach (string opt in help)
+            var xml = new XmlDocument();
+            xml.Load(file);
+
+            var idReqs = xml.SelectNodes("/product/prequest/req/IdReq");
+            foreach (XmlNode id in idReqs)
             {
-                if (arg.Equals(opt, StringComparison.OrdinalIgnoreCase))
+                var type = id.SelectSingleNode("idType");
+                if (type != null && type.InnerText.Equals("21")) // Паспорт гражданина РФ
                 {
-                    Console.WriteLine("Help"); //TODO Help wanted
-
-                    Environment.Exit(1);
+                    var num = id.SelectSingleNode("idNum");
+                    if (num != null && num.InnerText.Length < 6) // Номер паспорта
+                    {
+                        num.InnerText = num.InnerText.PadLeft(6, '0');
+                    }
                 }
-            }
-        }
+            }    
 
-        private static void SetIf(string arg, string key)
-        {
-            if (arg.StartsWith(key + "=", StringComparison.OrdinalIgnoreCase))
-            {
-                _settings[key] = arg.Substring(key.Length + 1);
-            }
-        }
+            string key = "MemberCode";
+            xml.GetElementsByTagName(key)[0].InnerText = Config.Required(key);
 
-        private static bool IsSet(string key)
-        {
-            return (_settings[key] ?? "0").Equals("1");
+            key = "UserID";
+            xml.GetElementsByTagName(key)[0].InnerText = Config.Required(key);
+
+            key = "Password";
+            xml.GetElementsByTagName(key)[0].InnerText = Config.Required(key);
+
+            key = "requestDateTime";
+            xml.GetElementsByTagName(key)[0].InnerText = _today;
+
+            xml.Save(reqFile);
         }
 
         private static void DownloadFile(string src, string dst, string bak)
         {
-            string uri = _settings["Uri"] ?? "https://icrs.nbki.ru/products/B2BRequestServlet";
+            if (!File.Exists(src))
+            {
+                throw new Exception($"File \"{src}\" for Download not found.");
+            }
+
+            string uri = Config.Optional("Uri", "https://icrs.nbki.ru/products/B2BRequestServlet");
 
             var client = new WebClient();
-            byte[] response = client.UploadData(uri, File.ReadAllBytes(src));
+            byte[] response;
+            try
+            {
+                response = client.UploadData(uri, File.ReadAllBytes(src));
+            }
+            catch (Exception e)
+            {
+                throw new Exception($"HTTPS error: \"{e.Message}\"", e);
+            }
 
             if (response != null && response.Length > 0)
             {
-                //File.WriteAllBytes(dst + ".p7s", response);
+                if (Config.IsSet("SaveSigned"))
+                {
+                    File.WriteAllBytes(dst + ".p7s", response);
+                }
 
                 // Clean XML from a PKCS#7 signature
                 var signedCms = new SignedCms();
@@ -159,12 +160,10 @@ namespace ICRS_NBKI_Request
                 var text = xml.SelectSingleNode("/product/preply/err/ctErr/Text/text()");
                 if (text != null)
                 {
-                    Console.WriteLine("Error: " + text.InnerText); //TODO Error returned
+                    throw new Exception($"NBKI error: \"{text.InnerText}\"");
                 }
-                else
-                {
-                    Console.WriteLine($"File {dst} ready.");
-                }
+
+                Console.WriteLine($"Download \"{dst}\" done.");
 
                 if (File.Exists(bak))
                 {
@@ -177,12 +176,18 @@ namespace ICRS_NBKI_Request
 
         private static void ExtractAccountReplies(string src, string format)
         {
+            if (!File.Exists(src))
+            {
+                throw new Exception($"File \"{src}\" for Extract not found.");
+            }
+
             var xml = new XmlDocument();
             xml.Load(src);
 
-            bool activeOnly = IsSet("ActiveOnly");
+            bool activeOnly = Config.IsSet("ActiveOnly");
 
             var sections = xml.GetElementsByTagName("AccountReply");
+            int done = 0;
             for (int i = 0; i < sections.Count; i++)
             {
                 var sec = new XmlDocument();
@@ -202,7 +207,16 @@ namespace ICRS_NBKI_Request
 
                 string file = string.Format(format, i + 1);
                 sec.Save(file);
+
+                Console.WriteLine($"Extract \"{file}\" done.");
+                done++;
             }
+
+            string result = activeOnly
+                ? $"Extracted {done} active of {sections.Count} total."
+                : $"Extracted {done} of {sections.Count} total.";
+
+            Console.WriteLine(result);
         }
     }
 }
