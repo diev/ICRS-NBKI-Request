@@ -45,6 +45,7 @@ namespace ICRS_NBKI_Request
 
                 string bakPath = Config.CheckDirectory("RequestsBAK", "REQ");
                 string dstPath = Config.CheckDirectory("Results", "XML");
+                string dxtPath = Config.CheckDirectory("ExtraResults", @"XML\Extra");
 
                 string srcPath = Config.Optional("Requests", ".");
                 var dir = new DirectoryInfo(srcPath);
@@ -67,22 +68,32 @@ namespace ICRS_NBKI_Request
                     if (Config.IsSet("Extract"))
                     {
                         string mask = filename + " *.xml";
-                        var d = new DirectoryInfo(dstPath);
+                        var d = new DirectoryInfo(dxtPath);
                         foreach (var f in d.GetFiles(mask))
                         {
                             f.Delete();
                         }
 
-                        string format = Path.Combine(dstPath, filename + " {0:000}.xml");
+                        string format = Path.Combine(dxtPath, filename + " {0:000}.xml");
                         ExtractAccountReplies(dstFile, format);
                     }
                 }
 
+                if (Config.IsSet("PressEnter"))
+                {
+                    Console.WriteLine("Press Enter to exit...");
+                    Console.ReadLine();
+                }
                 Environment.Exit(0);
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                if (Config.IsSet("PressEnter"))
+                {
+                    Console.WriteLine("Press Enter to exit...");
+                    Console.ReadLine();
+                }
                 Environment.Exit(1);
             }
         }
@@ -171,6 +182,11 @@ namespace ICRS_NBKI_Request
                 }
 
                 File.Move(src, bak);
+                if (File.Exists(src)) //?!
+                {
+                    Console.WriteLine($"Not moved \"{src}\"?!");
+                    File.Delete(src);
+                }
             }
         }
 
