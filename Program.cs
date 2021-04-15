@@ -51,8 +51,10 @@ namespace ICRS_NBKI_Request
                 var dir = new DirectoryInfo(srcPath);
                 foreach (var file in dir.GetFiles("*.req"))
                 {
+                    string srcFile = file.FullName;
+
                     string reqFile = "request.xml";
-                    FormRequestXml(file.FullName, reqFile);
+                    FormRequestXml(srcFile, reqFile);
 
                     string filename = $"{_today} {file.Name}";
                     string bakFile = Path.Combine(bakPath, filename);
@@ -62,7 +64,7 @@ namespace ICRS_NBKI_Request
 
                     if (Config.IsSet("Request"))
                     {
-                        DownloadFile(reqFile, dstFile, bakFile);
+                        DownloadFile(srcFile, reqFile, dstFile, bakFile);
                     }
 
                     if (Config.IsSet("Extract"))
@@ -132,11 +134,11 @@ namespace ICRS_NBKI_Request
             xml.Save(reqFile);
         }
 
-        private static void DownloadFile(string src, string dst, string bak)
+        private static void DownloadFile(string src, string req, string dst, string bak)
         {
-            if (!File.Exists(src))
+            if (!File.Exists(req))
             {
-                throw new Exception($"File \"{src}\" for Download not found.");
+                throw new Exception($"File \"{req}\" for Download not found.");
             }
 
             string uri = Config.Optional("Uri", "https://icrs.nbki.ru/products/B2BRequestServlet");
@@ -145,7 +147,7 @@ namespace ICRS_NBKI_Request
             byte[] response;
             try
             {
-                response = client.UploadData(uri, File.ReadAllBytes(src));
+                response = client.UploadData(uri, File.ReadAllBytes(req));
             }
             catch (Exception e)
             {
@@ -181,12 +183,9 @@ namespace ICRS_NBKI_Request
                     File.Delete(bak);
                 }
 
-                File.Move(src, bak);
-                if (File.Exists(src)) //?!
-                {
-                    Console.WriteLine($"Not moved \"{src}\"?!");
-                    File.Delete(src);
-                }
+                File.Move(req, bak);
+
+                File.Delete(src);
             }
         }
 
