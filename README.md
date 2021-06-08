@@ -1,5 +1,8 @@
 # [ICRS-NBKI-Request]
 
+[![Build status]][appveyor]
+[![GitHub Release]][releases]
+
 Получение XML данных при обращении к API НБКИ для расчета показателя долговой
 нагрузки (ПДН).
 
@@ -22,3 +25,9 @@ Licensed under the [Apache License, Version 2.0].
 [ICRS-NBKI-Request]: https://diev.github.io/ICRS-NBKI-Request/
 [пример]: request.xml
 [Apache License, Version 2.0]: LICENSE
+
+[appveyor]: https://ci.appveyor.com/project/diev/icrs-nbki-request
+[releases]: https://github.com/diev/ICRS-NBKI-Request/releases/latest
+
+[Build status]: https://ci.appveyor.com/api/projects/status/q83mpd646lprhc42?svg=true
+[GitHub Release]: https://img.shields.io/github/release/diev/ICRS-NBKI-Request.svg
