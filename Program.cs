@@ -18,16 +18,21 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Net.Security;
 using System.Security.Cryptography.Pkcs;
+using System.Security.Cryptography.X509Certificates;
 using System.Xml;
 
 namespace ICRS_NBKI_Request
 {
-    class Program
+    public class Program
     {
-        static readonly string _today = DateTime.Today.ToString("yyyy-MM-dd");
+        private static readonly bool _test = false; //true;
+        private static readonly string _today = DateTime.Today.ToString("yyyy-MM-dd");
+        private static X509Certificate _serverCertificate = null;
+        private static X509Certificate _myCertificate = null;
 
-        static void Main(string[] args)
+        public static void Main(string[] args)
         {
             try
             {
@@ -49,6 +54,23 @@ namespace ICRS_NBKI_Request
                 string dxtPath = Config.CheckDirectory("ExtraResults", @"XML\Extra");
 
                 string srcPath = Config.Optional("Requests", ".");
+
+                if (Config.TryGet("ServerThumbprint", out string serverThumbprint))
+                { 
+                    _serverCertificate = GetX509Certificate(serverThumbprint);
+                }
+
+                if (Config.TryGet("MyThumbprint", out string myThumbprint))
+                {
+                    _myCertificate = GetX509Certificate(myThumbprint);
+                }
+
+                if (_test)
+                {
+                    Test();
+                    return;
+                }
+
                 var dir = new DirectoryInfo(srcPath);
                 foreach (var file in dir.GetFiles("*.req"))
                 {
@@ -140,59 +162,89 @@ namespace ICRS_NBKI_Request
         {
             if (!File.Exists(req))
             {
-                throw new Exception($"File \"{req}\" for Download not found.");
+                throw new FileNotFoundException($"File for Download not found.", req);
             }
 
-            string uri = Config.Optional("Uri", "https://icrs.nbki.ru/products/B2BRequestServlet");
+            byte[] data = File.ReadAllBytes(req);
+            string uri = Config.Optional("Uri", "https://icrs.demo.nbki.ru/products/B2BRequestServlet");
 
-            var client = new WebClient();
-            byte[] response;
+            var request = (HttpWebRequest)WebRequest.Create(uri);
+            request.Method = "POST";
+            request.ContentType = "binary/octed-stream;character=windows-1251";
+            request.ContentLength = data.Length;
+
+            if (_serverCertificate != null)
+            {
+                request.ServerCertificateValidationCallback = new RemoteCertificateValidationCallback(ValidateServerCertificate);
+            }
+
+            if (_myCertificate != null)
+            {
+                request.ClientCertificates.Add(_myCertificate);
+            }
+
+            using (var writer = new BinaryWriter(request.GetRequestStream()
+                ?? throw new InvalidOperationException("Request stream is null")))
+            {
+                writer.Write(data);
+                writer.Flush();
+            }
+
             try
             {
-                response = client.UploadData(uri, File.ReadAllBytes(req));
+                var response = (HttpWebResponse)request.GetResponse();
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    throw new WebException($"Error {response.StatusCode} of Web connection.");
+                }
+
+                using (var ms = new MemoryStream())
+                using (var stream = response.GetResponseStream()
+                    ?? throw new InvalidOperationException("Response stream is null"))
+                {
+                    stream.CopyTo(ms);
+                    data = ms.ToArray();
+                }
             }
             catch (Exception e)
             {
-                throw new Exception($"HTTPS error: \"{e.Message}\"", e);
+                Console.WriteLine(e.Message);
             }
 
-            if (response != null && response.Length > 0)
+            if (Config.IsSet("SaveSigned"))
             {
-                if (Config.IsSet("SaveSigned"))
-                {
-                    File.WriteAllBytes(dst + ".p7s", response);
-                }
+                File.WriteAllBytes(dst + ".p7s", data);
+            }
 
-                // Clean XML from a PKCS#7 signature
-                var signedCms = new SignedCms();
-                signedCms.Decode(response);
-                response = signedCms.ContentInfo.Content;
+            // Clean XML from a PKCS#7 signature
+            var signedCms = new SignedCms();
+            signedCms.Decode(data);
+            data = signedCms.ContentInfo.Content;
 
-                File.WriteAllBytes(dst, response);
+            File.WriteAllBytes(dst, data);
 
-                var xml = new XmlDocument();
-                xml.Load(dst);
-                var text = xml.SelectSingleNode("/product/preply/err/ctErr/Text/text()");
-                if (text != null)
-                {
-                    File.Copy(req, err, true);
-                    File.Delete(req);
-                    File.Delete(src);
-                    throw new Exception($"NBKI error: \"{text.InnerText}\"");
-                }
-
-                File.Copy(req, bak, true);
+            var xml = new XmlDocument();
+            xml.Load(dst);
+            var text = xml.SelectSingleNode("/product/preply/err/ctErr/Text/text()");
+            if (text != null)
+            {
+                File.Copy(req, err, true);
                 File.Delete(req);
                 File.Delete(src);
-                Console.WriteLine($"Download \"{dst}\" done.");
+                throw new InvalidOperationException($"NBKI error: \"{text.InnerText}\"");
             }
+
+            File.Copy(req, bak, true);
+            File.Delete(req);
+            File.Delete(src);
+            Console.WriteLine($"Download \"{dst}\" done.");
         }
 
         private static void ExtractAccountReplies(string src, string format)
         {
             if (!File.Exists(src))
             {
-                throw new Exception($"File \"{src}\" for Extract not found.");
+                throw new FileNotFoundException("File for Extract not found.", src);
             }
 
             var xml = new XmlDocument();
@@ -231,6 +283,76 @@ namespace ICRS_NBKI_Request
                 : $"Extracted {done} of {sections.Count} total.";
 
             Console.WriteLine(result);
+        }
+
+        private static void Test()
+        {
+            string uri = "https://reports.demo.nbki.ru/";
+            string result = Request(uri);
+
+            Console.WriteLine(result.Length > 200 ? result.Substring(0, 200) : result);
+        }
+
+        private static string Request(string uri)
+        {
+            var request = (HttpWebRequest) WebRequest.Create(uri);
+            request.ClientCertificates.Add(_myCertificate);
+
+            return Response(request);
+        }
+
+        private static string Response(HttpWebRequest request)
+        {
+            var response = (HttpWebResponse) request.GetResponse();
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                throw new InvalidOperationException($"Unexpected behavior! Status code: {response.StatusCode}.");
+            }
+
+            using (var streamReader = new StreamReader(response.GetResponseStream()
+                ?? throw new InvalidOperationException("Response stream is null")))
+            {
+                return streamReader.ReadToEnd();
+            }
+        }
+
+        private static X509Certificate GetX509Certificate(string thumbprint, bool validOnly = true)
+        {
+            thumbprint = thumbprint.ToUpper().Replace(" ", string.Empty); //By fact ToUpper() not required
+
+            using (var store = new X509Store(StoreName.My, StoreLocation.CurrentUser)) // mmc: Сертификаты - Пользователя - Личные
+            {
+                store.Open(OpenFlags.ReadOnly);
+
+                //var cert = store.Certificates.Cast<X509Certificate>().FirstOrDefault(x =>
+                //    x.GetSerialNumberString().Equals(certificateSerialNumber, StringComparison.InvariantCultureIgnoreCase));
+
+                var found = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, validOnly);
+                if (found.Count == 1)
+                {
+                    return found[0];
+                }
+
+                throw new ArgumentNullException("~Thumbprint", $"Certificate with thumbprint \"{thumbprint}\" not found.");
+            }
+        }
+
+        // The following method is invoked by the RemoteCertificateValidationDelegate.
+        public static bool ValidateServerCertificate(
+              object sender,
+              X509Certificate certificate,
+              X509Chain chain,
+              SslPolicyErrors sslPolicyErrors)
+        {
+            if (sslPolicyErrors == SslPolicyErrors.None)
+            {
+                return true; //TODO: Check _serverThumbprint additionally
+            }
+
+            Console.WriteLine($"Certificate error: {sslPolicyErrors}");
+
+            // Do not allow this client to communicate with unauthenticated servers.
+            return false;
         }
     }
 }

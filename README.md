@@ -18,6 +18,17 @@
 По умолчанию программа использует текущую папку `.`, но это можно
 (раздельно и вход, и выход) настроить в `.exe.config`.
 
+## HowTo
+
+Как быстро посмотреть параметр Thumbprint (отпечаток сертификата)
+с помощью PowerShell - в хранилище Личных (для клиента):
+
+    Get-ChildItem -Path cert:\CurrentUser\My
+
+в хранилище Других пользователей (для удаленного сервера):
+
+    Get-ChildItem -Path cert:\CurrentUser\Addressbook
+
 ## License
 
 Licensed under the [Apache License, Version 2.0].

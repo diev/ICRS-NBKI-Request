@@ -26,6 +26,11 @@ namespace ICRS_NBKI_Request
     {
         static readonly NameValueCollection _settings = ConfigurationManager.AppSettings;
 
+        public static void Set(string key, string value)
+        {
+            _settings[key] = value;
+        }
+
         public static void SetIf(string arg, string key)
         {
             if (arg.StartsWith(key + "=", StringComparison.OrdinalIgnoreCase))
@@ -44,7 +49,7 @@ namespace ICRS_NBKI_Request
             string value = _settings[key];
             if (string.IsNullOrWhiteSpace(value))
             {
-                throw new Exception($"No value for *{key}*.");
+                throw new ArgumentNullException($"No value for key \"{key}\".");
             }
             return value;
         }
@@ -52,11 +57,15 @@ namespace ICRS_NBKI_Request
         public static string Optional(string key, string defaultValue)
         {
             string value = _settings[key];
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return defaultValue;
-            }
-            return value;
+            return string.IsNullOrWhiteSpace(value)
+                ? defaultValue
+                : value;
+        }
+
+        public static bool TryGet(string key, out string value)
+        {
+            value = _settings[key];
+            return !string.IsNullOrWhiteSpace(value);
         }
 
         public static string CheckDirectory(string key, string defaultValue)
