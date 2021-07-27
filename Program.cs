@@ -44,6 +44,7 @@ namespace ICRS_NBKI_Request
                 //ServicePointManager.ServerCertificateValidationCallback += (se, cert, chain, sslerror) => { return true; };
 
                 string bakPath = Config.CheckDirectory("RequestsBAK", "REQ");
+                string errPath = Config.CheckDirectory("ErrorsBAK", "ERR");
                 string dstPath = Config.CheckDirectory("Results", "XML");
                 string dxtPath = Config.CheckDirectory("ExtraResults", @"XML\Extra");
 
@@ -58,13 +59,14 @@ namespace ICRS_NBKI_Request
 
                     string filename = $"{_today} {file.Name}";
                     string bakFile = Path.Combine(bakPath, filename);
+                    string errFile = Path.Combine(errPath, filename);
 
                     filename = Path.ChangeExtension(filename, null);
                     string dstFile = Path.Combine(dstPath, filename + ".xml");
 
                     if (Config.IsSet("Request"))
                     {
-                        DownloadFile(srcFile, reqFile, dstFile, bakFile);
+                        DownloadFile(srcFile, reqFile, dstFile, bakFile, errFile);
                     }
 
                     if (Config.IsSet("Extract"))
@@ -134,7 +136,7 @@ namespace ICRS_NBKI_Request
             xml.Save(reqFile);
         }
 
-        private static void DownloadFile(string src, string req, string dst, string bak)
+        private static void DownloadFile(string src, string req, string dst, string bak, string err)
         {
             if (!File.Exists(req))
             {
@@ -173,19 +175,16 @@ namespace ICRS_NBKI_Request
                 var text = xml.SelectSingleNode("/product/preply/err/ctErr/Text/text()");
                 if (text != null)
                 {
+                    File.Copy(req, err, true);
+                    File.Delete(req);
+                    File.Delete(src);
                     throw new Exception($"NBKI error: \"{text.InnerText}\"");
                 }
 
-                Console.WriteLine($"Download \"{dst}\" done.");
-
-                if (File.Exists(bak))
-                {
-                    File.Delete(bak);
-                }
-
-                File.Move(req, bak);
-
+                File.Copy(req, bak, true);
+                File.Delete(req);
                 File.Delete(src);
+                Console.WriteLine($"Download \"{dst}\" done.");
             }
         }
 

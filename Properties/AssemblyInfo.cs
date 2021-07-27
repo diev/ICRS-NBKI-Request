@@ -24,7 +24,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("ICRS-NBKI-Request")]
 [assembly: AssemblyDescription("Получение XML данных при обращении к API НБКИ для расчета показателя долговой нагрузки (ПДН).")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("diev")]
 [assembly: AssemblyProduct("ICRS-NBKI-Request")]
 [assembly: AssemblyCopyright("Copyright © 2021 Dmitrii Evdokimov")]
 [assembly: AssemblyTrademark("")]
@@ -48,5 +48,5 @@ using System.Runtime.InteropServices;
 // Можно задать все значения или принять номера сборки и редакции по умолчанию 
 // используя "*", как показано ниже:
 // [assembly: AssemblyVersion("1.0.*")]
-[assembly: AssemblyVersion("2.5.1.0")]
-[assembly: AssemblyFileVersion("2.5.1.0")]
+[assembly: AssemblyVersion("2.6.0.0")]
+[assembly: AssemblyFileVersion("2.6.0.0")]
